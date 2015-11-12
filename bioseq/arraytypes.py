@@ -23,9 +23,16 @@ def validate_sequence_chars(seq, seqtype='nucl'):
 
 
 class SequenceArray(MutableMapping):
-    """Multiple sequence class
+    """Multiple sequence array object constructor
 
-    This class
+    Stores one or more biological sequences as a set of id (key) - sequence string (value) pair based on its original
+    input order by using an OrderedDict container.
+
+    SequenceArray can be instantiated by passing a dictionary-like object whose keys are names or descriptions of their
+    corresponding sequence string value. The string value can be a nucleotide sequence (nucl), codon sequence (cod),
+    or protein sequence (prot). Note that the string value type, whether 'nucl', 'prot', or 'cod,  must be the same
+    for all items in the SequenceArray.
+
     """
 
     def __init__(self, input_obj, seqtype='nucl', name='', description=''):
@@ -67,31 +74,34 @@ class SequenceArray(MutableMapping):
                 raise NotImplementedError('Passing FASTA-formatted strings are not yet supported. '
                                           'Instantiate using an OrderedDict or passing a valid filepath instead.')
         # Check if sequences contain invalid characters
-        self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
+        if seqtype in ('nucl', 'pro'):
+            self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
+        else:  # codon seqtype
+            pass
 
     @property
     def ids(self):
         return self._ids
 
-    # @ids.setter
-    # def ids(self, value):
-    #     raise AttributeError('Setting ids using this method is not permitted.')
-    #
-    # @ids.deleter
-    # def ids(self):
-    #     raise AttributeError('Deleting ids using this method is not permitted.')
+    @ids.setter
+    def ids(self, value):
+        raise AttributeError('Setting ids using this method is not permitted.')
+
+    @ids.deleter
+    def ids(self):
+        raise AttributeError('Deleting ids using this method is not permitted.')
 
     @property
     def sequences(self):
         return self._sequences
 
-    # @sequences.setter
-    # def sequences(self, value):
-    #     raise AttributeError('Setting sequences using this method is not permitted.')
-    #
-    # @sequences.deleter
-    # def sequences(self):
-    #     raise AttributeError('Deleting sequences using this method is not permitted.')
+    @sequences.setter
+    def sequences(self, value):
+        raise AttributeError('Setting sequences using this method is not permitted.')
+
+    @sequences.deleter
+    def sequences(self):
+        raise AttributeError('Deleting sequences using this method is not permitted.')
 
     def __setitem__(self, key, sequence):
         self.ids.append(key)
@@ -165,7 +175,7 @@ class SequenceArray(MutableMapping):
 
         Returns
         -------
-        GenericAlignment
+        SequenceAlignment
 
         """
         # check if program is in choices or not. if not return an error
@@ -294,10 +304,27 @@ class SequenceArray(MutableMapping):
         return composition_of
 
 
-class NucleotideSequenceArray(SequenceArray):
+class NucleotideArray(SequenceArray):
+    """Nucleotide sequence array object constructor
+
+    This is a special type of SequenceArray for nucleotide sequences containing additional methods specific for
+    handling nucleotide sequence data. On instantiation, it constructs a SequenceArray object whose seqtype is set to
+    'nucl'.
+
+    NucleotideArray is suitable for both protein-coding and non-protein coding nucleotide sequences. However,
+    if sequences are protein-coding, it is better to use the CodonArray object as this contains methods useful
+    for protein-coding sequences such as the ability count by nucleotide triplets and to translate to amino acid
+    sequences.
+
+    If the array contains in-frame protein-coding sequence, NucleotideArray can construct a CodonArray using the method
+    `to_codonarray`. However, NucleotideArray cannot differentiate by itself whether a sequence is coding or
+    non-coding, and if coding, whether it is in-frame or not, therefore it is up to the user to judge
+    whether it is appropriate to represent the sequences as plain nucleotides through NucleotideArray or as
+    protein-coding sequences through CodonArray.
+
+    """
     def __init__(self, input_obj, name='', description=''):
         super().__init__(input_obj, name=name, seqtype='nucl', description=description)
-        self.translated = self.__translate()
 
     @staticmethod
     def nucleotide_to_codon(nucleotide_str):
@@ -313,19 +340,47 @@ class NucleotideSequenceArray(SequenceArray):
             if j+3 <= len(nucleotide_str):
                 yield nucleotide_str[j:j+3]
 
-    def __translate(self):
-        """
-        Translates nucleotide sequences into amino acid sequences.
+    def to_codonarray(self):
+        pass
 
-        Assumes that the nucleotide sequence is coding,
+    def basecomp(self):
+        """
+        Return the base composition of a NucleotideArray
+        @return: namedtuple of 'A', 'T', 'G', 'C', 'AT', 'GC' percent
+        """
+        #assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
+        basecomp_of = super().composition(self, seqtype=self.seqtype).T
+        basecomp_of['AT'] = basecomp_of['A'] + basecomp_of['T']
+        basecomp_of['GC'] = basecomp_of['G'] + basecomp_of['C']
+        return basecomp_of.T
+
+
+class CodonArray(SequenceArray):
+    """Protein-coding nucleotide sequence array object constructor
+
+    This is a special type of SequenceArray for protein-coding sequences. If the array contains
+    in-frame protein-coding sequence, NucleotideArray contains methods to represent data as codons (nculeotide triplets)
+    and translate to protein sequence. Note that NucleotideArray cannot differentiate by itself whether a sequence
+    is coding or non-coding, therefore it is up to the user to judge whether it is appropriate to use these methods on
+    the data.
+
+    """
+    def __init__(self, input_obj, name='', description=''):
+        super().__init__(input_obj, name=name, seqtype='cod', description=description)
+        self.translated = self.__translate()
+
+    def __translate(self):
+        """Translates nucleotide sequences into amino acid sequences
+
+        Assumes that the nucleotide sequence is protein-coding,
         in-frame, and the start of the ORF corresponds to the beginning of the nucleotide sequence.
-        @return: ProteinSequenceArray object
+        @return: ProteinArray object
         """
         transl_dct = OrderedDict()
         for key, nt_seq in zip(self.ids, self.sequences):
             transl_dct[key] = ''.join([CODON_TO_AA[cod.upper()]
-                                       for cod in NucleotideSequenceArray.nucleotide_to_codon(nt_seq)])
-        return ProteinSequenceArray(transl_dct)
+                                       for cod in NucleotideArray.nucleotide_to_codon(nt_seq)])
+        return ProteinArray(transl_dct)
 
     def codonalign(self, codon_aln_file='out.ffn.aln', program='muscle'):
         """
@@ -364,7 +419,7 @@ class NucleotideSequenceArray(SequenceArray):
         codon_aln = OrderedDict()
         i = 0
         for nt_seq, aa_aln_seq in zip(self.sequences, aa_aln.sequences):
-            codon = NucleotideSequenceArray.nucleotide_to_codon(nt_seq)
+            codon = NucleotideArray.nucleotide_to_codon(nt_seq)
             codon_aln[self.ids[i]] = ''.join([next(codon) if aa != '-' else '---' for aa in list(aa_aln_seq)])
             i += 1
         codon_aln = CodonAlignment(codon_aln)
@@ -372,18 +427,13 @@ class NucleotideSequenceArray(SequenceArray):
         return codon_aln
 
     def basecomp(self):
-        """
-        Return the base composition of a NucleotideSequenceArray
-        @return: namedtuple of 'A', 'T', 'G', 'C', 'AT', 'GC' percent
-        """
-        #assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
-        basecomp_of = super().composition(self, seqtype=self.seqtype).T
-        basecomp_of['AT'] = basecomp_of['A'] + basecomp_of['T']
-        basecomp_of['GC'] = basecomp_of['G'] + basecomp_of['C']
-        return basecomp_of.T
+        pass
+
+    def codoncomp(self):
+        pass
 
 
-class ProteinSequenceArray(SequenceArray):
+class ProteinArray(SequenceArray):
     def __init__(self, input_obj, name='', description=''):
         super().__init__(input_obj, name=name, seqtype='prot', description=description)
 
@@ -391,7 +441,7 @@ class ProteinSequenceArray(SequenceArray):
         return super().composition(self, seqtype=self.seqtype)
 
 
-class GenericAlignment(MutableMapping):
+class SequenceAlignment(MutableMapping):
     """
     Multiple SequenceArray Alignment base class
     --------------------------------------
@@ -431,6 +481,7 @@ class GenericAlignment(MutableMapping):
                     self._ids = input_obj[0]
                 else:
                     raise TypeError('First item of tuple is not a list.')
+                # TODO : obviate the need for importing numpy, possibly by forking tinynumpy to enable character arrays
                 if isinstance(input_obj[1], np.ndarray):
                     self._sequences = input_obj[1]
                 else:
@@ -696,7 +747,7 @@ class GenericAlignment(MutableMapping):
         return SequenceArray.composition(sequence_obj, seqtype=seqtype)
 
 
-class NucleotideAlignment(GenericAlignment):
+class NucleotideAlignment(SequenceAlignment):
 
     def __init__(self, input_obj, name='', description=''):
         super().__init__(input_obj, 'nucl', charsize=1, name=name, description=description)
@@ -713,7 +764,7 @@ class NucleotideAlignment(GenericAlignment):
         return basecomp_of.T
 
 
-class ProteinAlignment(GenericAlignment):
+class ProteinAlignment(SequenceAlignment):
 
     def __init__(self, input_obj, name='', description=''):
         super().__init__(input_obj, 'prot', charsize=1, name=name, description=description)
@@ -725,7 +776,7 @@ class ProteinAlignment(GenericAlignment):
 class CodonAlignment(NucleotideAlignment):
 
     def __init__(self, input_obj, name='', description=''):
-        GenericAlignment.__init__(self, input_obj, seqtype='cod', charsize=3, name=name, description=description)
+        SequenceAlignment.__init__(self, input_obj, seqtype='cod', charsize=3, name=name, description=description)
         self.ntalignment = NucleotideAlignment(
             MSA(ids=self.ids, alignment=np.array([list(''.join(seq)) for seq in self.sequences], dtype='U1')))
         self.pos = dict()
