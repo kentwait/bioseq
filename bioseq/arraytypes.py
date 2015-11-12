@@ -28,7 +28,8 @@ class SequenceArray(MutableMapping):
             'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
         name : str
             Name of the set of sequence records
-        description
+        description : str
+            Short description
 
         """
         self.seqtype = seqtype
@@ -157,6 +158,7 @@ class SequenceArray(MutableMapping):
         seqfile = '{0}.{1}'.format(self.name, 'fna' if self.seqtype == 'nucl' else 'faa')
         self.to_fasta(seqfile)
 
+        # TODO : extract program paths into variables so that users can alter at runtime
         # Default to MUSCLE
         if program == 'mafft':
             cmd_str = 'mafft {args} {i} > {o}'.format(args='--auto' if not program_args else program_args,
@@ -184,7 +186,7 @@ class SequenceArray(MutableMapping):
 
         Parameters
         ----------
-        param path : str
+        path : str
             File path (absolute or relative) where the FASTA file is located.
 
         Returns
@@ -247,11 +249,22 @@ class SequenceArray(MutableMapping):
 
     @staticmethod
     def composition(sequence_obj, seqtype='nucl'):
+        """Return the per sequence composition of a SequenceArray
+
+        Parameters
+        ----------
+        sequence_obj : SequenceArray
+        seqtype : str
+
+
+        Returns
+        -------
+        OrderedDict
+            Keys are sequence ids and values are namedtuple of the corresponding percent makeup for each character
+            except gaps
+
         """
-        Return the composition of a SequenceArray
-        @return: namedtuple of percent makeup for each character except gaps
-        """
-        #assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
+        # assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
         composition_of = OrderedDict()
         characters = BASES if seqtype in ['nucl', 'cod'] else AMINO_ACIDS
         for seqid, sequence in zip(sequence_obj.ids, sequence_obj.sequences):
