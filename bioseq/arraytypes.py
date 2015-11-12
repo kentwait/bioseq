@@ -7,6 +7,20 @@ from collections import OrderedDict, Counter
 import collections
 # import pandas as pd
 
+SEQTYPES = ('nucl', 'prot', 'cod')
+
+
+def validate_sequence_chars(seq, seqtype='nucl'):
+    assert isinstance(seq, str), TypeError('seq should be str or string-like.')
+    assert seqtype in SEQTYPES, ValueError('seqtype must be "nucl" for nucleotide, "prot" for protein, '
+                                           'or "cod" for codon.')
+    pattern = '[^{}]'.format(AMINO_ACIDS if seqtype == 'prot' else BASES)
+    invalid_chars = set(re.findall(pattern, seq))
+    if len(invalid_chars) > 0:
+        raise ValueError('Sequence contains invalid characters: {}. Check sequence type or individual sequences.'
+                         .format(repr(invalid_chars)))
+    return seq
+
 
 class SequenceArray(MutableMapping):
     """Multiple sequence class
@@ -32,6 +46,8 @@ class SequenceArray(MutableMapping):
             Short description
 
         """
+        assert seqtype in SEQTYPES, ValueError('seqtype must be "nucl" for nucleotide, "prot" for protein, '
+                                               'or "cod" for codon.')
         self.seqtype = seqtype
         self.name = name
         self.description = description
@@ -44,11 +60,14 @@ class SequenceArray(MutableMapping):
             # Test if file path
             if os.path.exists(input_obj):
                 records = SequenceArray.parse_fasta(input_obj)
-                self._ids = [key.split(' ')[0] for key in records.keys()]
+                # self._ids = [key.split(' ')[0] for key in records.keys()]
+                self._ids = list(records.keys())  # preprocessing already done by parse_fasta method
                 self._sequences = list(records.values())
             else:
                 raise NotImplementedError('Passing FASTA-formatted strings are not yet supported. '
                                           'Instantiate using an OrderedDict or passing a valid filepath instead.')
+        # Check if sequences contain invalid characters
+        self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
 
     @property
     def ids(self):
