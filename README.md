@@ -15,5 +15,5 @@ $ pip install git+git://github.com/kentwait/bioseq.git  # for the latest version
 For bug reports and feature requests, please use the [bioseq issue tracker](https://github.com/kentwait/bioseq/issues).
 
 Kent Kawashima
-email: i (at) kentwait.com
+i (at) kentwait.com
 
