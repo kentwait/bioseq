@@ -1,5 +1,7 @@
 from collections import OrderedDict, namedtuple, Counter
 
+__all__ = ['BASES', 'CODONS', 'STOP_CODONS', 'AMINO_ACIDS', 'GENETIC_CODE', 'CODON_FOLD', 'MSA']
+
 # Nucleotide and amino acid constants
 BASES = 'TCAG'
 CODONS = [a+b+c for a in BASES for b in BASES for c in BASES]

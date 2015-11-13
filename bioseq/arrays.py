@@ -7,8 +7,11 @@ from collections import OrderedDict, Counter
 import collections
 from copy import deepcopy
 
-SEQTYPES = ('nucl', 'prot', 'cod')
+__all__ = ['SEQTYPES', 'validate_sequence_chars',
+           'SequenceArray', 'NucleotideArray', 'ProteinArray', 'CodonArray',
+           'SequenceAlignment', 'NucleotideAlignment', 'ProteinAlignment', 'CodonAlignment']
 
+SEQTYPES = ('nucl', 'prot', 'cod')
 
 def validate_sequence_chars(seq, seqtype='nucl'):
     assert isinstance(seq, str), TypeError('seq should be str or string-like.')
