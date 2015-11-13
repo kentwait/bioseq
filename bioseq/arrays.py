@@ -63,7 +63,7 @@ class SequenceArray(MutableMapping):
         self.name = name
         self.description = description
 
-        if isinstance(input_obj, dict) or isinstance(input_obj, MutableMapping):
+        if isinstance(input_obj, dict):
             records = input_obj
             self._ids = list(records.keys())
             self._sequences = list(records.values())
@@ -453,6 +453,19 @@ class CodonArray(SequenceArray):
 
         """
         super().__init__(input_obj, name=name, seqtype='cod', description=description)
+        self.pos = OrderedDict()
+        self.pos[1] = NucleotideArray(
+            OrderedDict([(seqid, ''.join(sequence_as_list))
+                         for seqid, sequence_as_list in zip(self.ids,
+                                                            map(lambda x: x[0::3], self.sequences))]))
+        self.pos[2] = NucleotideArray(
+            OrderedDict([(seqid, ''.join(sequence_as_list))
+                         for seqid, sequence_as_list in zip(self.ids,
+                                                            map(lambda x: x[1::3], self.sequences))]))
+        self.pos[3] = NucleotideArray(
+            OrderedDict([(seqid, ''.join(sequence_as_list))
+                         for seqid, sequence_as_list in zip(self.ids,
+                                                            map(lambda x: x[2::3], self.sequences))]))
 
     @property
     def translated(self):
@@ -525,10 +538,34 @@ class CodonArray(SequenceArray):
         return codon_aln
 
     def basecomp(self):
-        pass
+        """Return base composition of each sequence
 
-    def codoncomp(self):
-        pass
+        Returns
+        -------
+        OrderedDict
+            Keys are sequence ids and values are OrderedDict of the corresponding percent makeup for each character
+            except gaps. For example, 'T', 'C', 'A', 'G' for nucleotides.
+
+        Sea also
+        --------
+        SequenceArray.composition : Character composition of a sequence
+        """
+        all_basecomp_of = super().composition(self, seqtype=self.seqtype)
+        for key, comp in all_basecomp_of.items():
+            all_basecomp_of[key]['AT'] = comp['A'] + comp['T']
+            all_basecomp_of[key]['GC'] = comp['G'] + comp['C']
+
+        pos_basecomp_of = {1: super().composition(self.pos[1], seqtype=self.seqtype),
+                           2: super().composition(self.pos[2], seqtype=self.seqtype),
+                           3: super().composition(self.pos[3], seqtype=self.seqtype),
+                           }
+        for pos, basecomp_of in pos_basecomp_of.items():
+            for key, comp in basecomp_of.items():
+                for base in BASES:
+                    all_basecomp_of[key][base + str(pos)] = basecomp_of[key][base]
+                all_basecomp_of[key]['AT' + str(pos)] = comp['A'] + comp['T']
+                all_basecomp_of[key]['GC' + str(pos)] = comp['G'] + comp['C']
+        return all_basecomp_of
 
     # TODO : Subclass string and tuple to create nucl, prot, cod datatypes
     @staticmethod
@@ -859,8 +896,7 @@ class SequenceAlignment(MutableMapping):
         return type(self)(MSA(ids=keys, alignment=self[keys]), self.seqtype)
 
     def labelpartition(self, label, start, end, coding=True):
-        # TODO
-        pass
+        NotImplementedError()
 
     def xgap(self):
         """Remove columns containing at least one gap character from the current alignment
@@ -924,7 +960,7 @@ class SequenceAlignment(MutableMapping):
             print(self.__class__.alignment_to_fasta(self, linewidth=linewidth), file=f)
 
     def to_phylip(self, path):  # TODO
-        pass
+        NotImplementedError()
 
     @staticmethod
     def parse_fasta(path, seqtype='nucl'):
@@ -1090,7 +1126,7 @@ class CodonAlignment(NucleotideAlignment):
         SequenceAlignment.__init__(self, input_obj, seqtype='cod', charsize=3, name=name, description=description)
         self.ntalignment = NucleotideAlignment(
             MSA(ids=self.ids, alignment=np.array([list(''.join(seq)) for seq in self.sequences], dtype='U1')))
-        self.pos = dict()
+        self.pos = OrderedDict()
         self.pos[1] = self.ntalignment.colx(0, None, 3)
         self.pos[2] = self.ntalignment.colx(1, None, 3)
         self.pos[3] = self.ntalignment.colx(2, None, 3)
