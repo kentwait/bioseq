@@ -544,7 +544,7 @@ class ProteinArray(SequenceArray):
 
         Parameters
         ----------
-        input_obj : dict or str
+        input_obj : tuple or dict or str
             Object used to populate a SequenceArray object. This may be one of the following:
             - Dictionary-like object whose id are sequence record names and values are the corresponding sequences
             - Path to a FASTA file
@@ -580,16 +580,23 @@ class SequenceAlignment(MutableMapping):
     """
     def __init__(self, input_obj, seqtype, charsize=1, name='', description=''):
         # TODO : accept FASTA-formatted string
-        """Create a new SequenceAlignment from a dictionary, file or FASTA-formatted string.
+        """Create a new SequenceAlignment from a tuple, dictionary, file or FASTA-formatted string.
 
         Parameters
         ----------
         input_obj : dict or str
             Alignment objects can be instantiated by passing one of the following:
+            - Tuple of list of record names and ndarray of sequences
             - Dictionary-like object
             - File path (absolute or relative)
+        seqtype : str
+            'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
         charsize : int
             Number of characters that define a column of the alignment.
+        name : str
+            Name of the set of sequence records
+        description : str
+            Short description
 
         """
         # Description
@@ -898,14 +905,15 @@ class SequenceAlignment(MutableMapping):
         pass
 
     @staticmethod
-    def parse_fasta(path, seq_type='nucl'):
+    def parse_fasta(path, seqtype='nucl'):
         """Read FASTA format entirely using only built-ins.
 
         Parameters
         ----------
         path : str
             File path (absolute or relative) where the FASTA file is located.
-        seq_type
+        seqtype : str
+            'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
 
         Returns
         -------
@@ -918,7 +926,7 @@ class SequenceAlignment(MutableMapping):
         for key, seq in seq_array.items():
             lengths.add(len(seq))
         if len(lengths) == 1:
-            return SequenceAlignment(seq_array, seq_type)
+            return SequenceAlignment(seq_array, seqtype)
         else:
             return seq_array
 
@@ -963,6 +971,12 @@ class SequenceAlignment(MutableMapping):
     def composition(alignment_obj, seqtype='nucl'):
         """Returns the character composition of the sequence alignment
 
+        Parameters
+        ----------
+        alignment_obj : SequenceAlignment
+        seqtype : str
+            'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
+
         Returns
         -------
         OrderedDict
@@ -977,6 +991,21 @@ class SequenceAlignment(MutableMapping):
 class NucleotideAlignment(SequenceAlignment):
 
     def __init__(self, input_obj, name='', description=''):
+        """Create a new NucleotideAlignment from a tuple, dictionary, file or FASTA-formatted string.
+
+        Parameters
+        ----------
+        input_obj : tuple or dict or str
+            Alignment objects can be instantiated by passing one of the following:
+            - Tuple of list of record names and ndarray of sequences
+            - Dictionary-like object
+            - File path (absolute or relative)
+        name : str
+            Name of the set of sequence records
+        description : str
+            Short description
+
+        """
         super().__init__(input_obj, 'nucl', charsize=1, name=name, description=description)
 
     def basecomp(self):
@@ -997,6 +1026,21 @@ class NucleotideAlignment(SequenceAlignment):
 class ProteinAlignment(SequenceAlignment):
 
     def __init__(self, input_obj, name='', description=''):
+        """Create a new ProteinAlignment from a tuple, dictionary, file or FASTA-formatted string.
+
+        Parameters
+        ----------
+        input_obj : tuple or dict or str
+            Alignment objects can be instantiated by passing one of the following:
+            - Tuple of list of record names and ndarray of sequences
+            - Dictionary-like object
+            - File path (absolute or relative)
+        name : str
+            Name of the set of sequence records
+        description : str
+            Short description
+
+        """
         super().__init__(input_obj, 'prot', charsize=1, name=name, description=description)
 
     def aacomp(self):
@@ -1006,6 +1050,21 @@ class ProteinAlignment(SequenceAlignment):
 class CodonAlignment(NucleotideAlignment):
 
     def __init__(self, input_obj, name='', description=''):
+        """Create a new CodonAlignment from a tuple, dictionary, file or FASTA-formatted string.
+
+        Parameters
+        ----------
+        input_obj : tuple or dict or str
+            Alignment objects can be instantiated by passing one of the following:
+            - Tuple of list of record names and ndarray of sequences
+            - Dictionary-like object
+            - File path (absolute or relative)
+        name : str
+            Name of the set of sequence records
+        description : str
+            Short description
+
+        """
         SequenceAlignment.__init__(self, input_obj, seqtype='cod', charsize=3, name=name, description=description)
         self.ntalignment = NucleotideAlignment(
             MSA(ids=self.ids, alignment=np.array([list(''.join(seq)) for seq in self.sequences], dtype='U1')))
@@ -1015,10 +1074,13 @@ class CodonAlignment(NucleotideAlignment):
         self.pos[3] = self.ntalignment.colx(2, None, 3)
 
     def make_raxml_codon_partition_file(self, save_path):
-        """
-        Make RAxML partition file for a codon alignment.
+        """Make RAxML partition file for a codon alignment
 
-        @param save_path: Partition file save path
+        Parameters
+        ----------
+        save_path: str
+            Partition file save path
+
         """
         # TODO : check if basedir of save_path exists
         ordinal_suffix = {1: 'st', 2: 'nd', 3: 'rd', 4: 'th', 5: 'th', 6: 'th', 7: 'th', 8: 'th', 9: 'th', 0: 'th'}
@@ -1029,12 +1091,20 @@ class CodonAlignment(NucleotideAlignment):
 
     @staticmethod
     def composition(codon_aln_obj, fold_counts=(), pos=2):
-        """
-        Return the character composition of a CodonAlignment depending on codon position and fold count
-        @param codon_aln_obj: CodonAlignment object
-        @param fold_counts: 1,2,3,4,6 fold codon degeneracy
-        @param pos: 0 (1st position), 1 (2nd position), 2 (3rd position)
-        @return: namedtuple of percent makeup for each character except gaps
+        """Return the character composition of a CodonAlignment depending on codon position and fold count
+
+        Parameters
+        ----------
+        codon_aln_obj : CodonAlignment
+        fold_counts : int
+            1,2,3,4,6 fold codon degeneracy
+        pos : int
+            0 (1st position), 1 (2nd position), 2 (3rd position)
+
+        Returns
+        -------
+        OrderedDict
+
         """
         codon_filter_set = set([codon for codon, fold in CODON_FOLD.items() if fold in fold_counts])
         filtered_sequences = OrderedDict()
