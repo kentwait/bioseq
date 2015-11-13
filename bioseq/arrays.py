@@ -146,7 +146,7 @@ class SequenceArray(MutableMapping):
         pass
 
     def to_fasta(self, path, linewidth=60):
-        """Save SequenceArray as a FASTA file
+        """Save sequence array as a FASTA file
 
         Parameters
         ----------
@@ -160,7 +160,7 @@ class SequenceArray(MutableMapping):
             print(SequenceArray.array_to_fasta(self.ids, self.sequences, linewidth=linewidth), file=f)
 
     def align(self, aln_file='out.aln', program='muscle', program_args=None):
-        """Calls an external alignment program to align the sequences inside SequenceArray.
+        """Calls an external alignment program to align the sequences in the sequence array.
 
         Parameters
         ----------
@@ -253,7 +253,7 @@ class SequenceArray(MutableMapping):
 
     @staticmethod
     def array_to_fasta(keys, sequences, linewidth=60):
-        """Converts a SequenceArray object to a FASTA-formatted string
+        """Converts a sequence array to a FASTA-formatted string
 
         Parameters
         ----------
@@ -282,7 +282,7 @@ class SequenceArray(MutableMapping):
 
     @staticmethod
     def composition(sequence_obj, seqtype='nucl'):
-        """Return the per sequence composition of a SequenceArray
+        """Return the per sequence composition of a sequence array
 
         Parameters
         ----------
@@ -768,7 +768,7 @@ class SequenceAlignment(MutableMapping):
         return self + other
 
     def head(self):
-        """Retrieves the first 5 entries of the SequenceAlignment
+        """Retrieves the first 5 entries of the sequence alignment
 
         Returns
         -------
@@ -779,7 +779,7 @@ class SequenceAlignment(MutableMapping):
         return type(self)(MSA(ids=self.ids[:5], alignment=self.sequences[:5]), self.seqtype)
 
     def tail(self):
-        """Retrieves the last 5 entries of the SequenceAlignment
+        """Retrieves the last 5 entries of the sequence alignment
 
         Returns
         -------
@@ -884,7 +884,10 @@ class SequenceAlignment(MutableMapping):
 
         Parameters
         ----------
-        linewidth : Number of characters per line
+        path : str
+            Filename/path of FASTA file
+        linewidth : int
+            Number of characters per line
 
         """
         # TODO : Check if basedir of path exists
@@ -921,10 +924,17 @@ class SequenceAlignment(MutableMapping):
 
     @staticmethod
     def concat(*alignments):
-        """
-        Concatenate multiple Alignment objects together
-        @param alignments: Alignment objects
-        @return: Alignment object concatenated in order
+        """Concatenate multiple sequence alignments together
+
+        Parameters
+        ----------
+        alignments : SequenceAlignment
+
+        Returns
+        -------
+        SequenceAlignment
+            New concatenated SequenceAlignment
+
         """
         concaternated_alignment = alignments[0]
         for alignment in alignments[1:]:
@@ -933,20 +943,30 @@ class SequenceAlignment(MutableMapping):
 
     @staticmethod
     def alignment_to_fasta(alignment, linewidth=60):
-        """
-        Save the alignment as a FASTA-formatted file
+        """Save the alignment as a FASTA-formatted file
 
-        @param alignment: Alignment object
-        @param linewidth: Number of characters per line
-        @return: FASTA-formatted string
+        Parameters
+        ----------
+        alignment : SequenceAlignment
+        linewidth : int
+            Number of characters per line
+
+        Returns
+        -------
+        str
+            FASTA-formatted string
+
         """
         return SequenceArray.array_to_fasta(alignment.ids, alignment.sequences, linewidth=linewidth)
 
     @staticmethod
     def composition(alignment_obj, seqtype='nucl'):
-        """
-        Return the character composition of an Alignment
-        @return: namedtuple of percent makeup for each character except gaps
+        """Returns the character composition of the sequence alignment
+
+        Returns
+        -------
+        OrderedDict
+
         """
         sequence_obj = SequenceArray(
             OrderedDict([(seqid, ''.join(sequence_as_list))
@@ -960,15 +980,18 @@ class NucleotideAlignment(SequenceAlignment):
         super().__init__(input_obj, 'nucl', charsize=1, name=name, description=description)
 
     def basecomp(self):
+        """Returns the base composition of the current nucleotide alignment
+
+        Returns
+        -------
+        OrderedDict
+
         """
-        Return the base composition of a NucleotideAlignment
-        @return: namedtuple of 'A', 'T', 'G', 'C', 'AT', 'GC' percent
-        """
-        #assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
-        basecomp_of = super().composition(self, seqtype=self.seqtype).T
-        basecomp_of['AT'] = basecomp_of['A'] + basecomp_of['T']
-        basecomp_of['GC'] = basecomp_of['G'] + basecomp_of['C']
-        return basecomp_of.T
+        basecomp_of = super().composition(self, seqtype=self.seqtype)
+        for key, comp in basecomp_of.items():
+            basecomp_of[key]['AT'] = comp['A'] + comp['T']
+            basecomp_of[key]['GC'] = comp['G'] + comp['C']
+        return basecomp_of
 
 
 class ProteinAlignment(SequenceAlignment):
