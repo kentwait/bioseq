@@ -787,6 +787,15 @@ class SequenceAlignment(MutableMapping):
     def __iadd__(self, other):
         return self + other
 
+    def keys(self):
+        return KeysView(self.ids)
+
+    def values(self):
+        return self.sequences
+
+    def items(self):
+        return ((self.ids[x],self.sequences[x]) for x in range(len(self.ids)))
+
     def head(self):
         """Retrieves the first 5 entries of the sequence alignment
 
