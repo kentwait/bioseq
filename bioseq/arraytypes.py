@@ -23,7 +23,8 @@ def validate_sequence_chars(seq, seqtype='nucl'):
 
 
 class SequenceArray(MutableMapping):
-    """Multiple sequence array object constructor
+    """
+    Multiple sequence array object constructor
 
     Stores one or more biological sequences as a set of id (key) - sequence string (value) pair based on its original
     input order by using an OrderedDict container.
@@ -289,8 +290,23 @@ class SequenceArray(MutableMapping):
         Returns
         -------
         OrderedDict
-            Keys are sequence ids and values are namedtuple of the corresponding percent makeup for each character
+            Keys are sequence ids and values are OrderedDict of the corresponding percent makeup for each character
             except gaps
+
+        Notes
+        -----
+        The return value is an OrderedDict of OrderedDicts. First level is indexed by sequence while second level is
+        indexed by character.
+        >>> seq_array = OrderedDict([('key1', 'AAA'), ('key2', 'TTT')])
+        >>> composition_of_seq_array = OrderedDict([ \
+            ('key1', OrderedDict([('T', 0), ('C', 0), ('A', 3/float(3)), ('G', 0)])), \
+            ('key2', OrderedDict([('T', 3/float(3)), ('C', 0), ('A', 0), ('G', 0)])), ])
+        >>> seq_array['key1']
+        'AAA'
+        >>> composition_of_seq_array['key1']
+        OrderedDict([('T', 0), ('C', 0), ('A', 1.0), ('G', 0)])
+        >>> composition_of_seq_array['key1']['A']
+        1.0
 
         """
         # assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
@@ -305,7 +321,8 @@ class SequenceArray(MutableMapping):
 
 
 class NucleotideArray(SequenceArray):
-    """Nucleotide sequence array object constructor
+    """
+    Nucleotide sequence array object constructor
 
     This is a special type of SequenceArray for nucleotide sequences containing additional methods specific for
     handling nucleotide sequence data. On instantiation, it constructs a SequenceArray object whose seqtype is set to
@@ -328,11 +345,18 @@ class NucleotideArray(SequenceArray):
 
     @staticmethod
     def nucleotide_to_codon(nucleotide_str):
-        """
-        Generator that converts a nucleotide triplet into its corresponding codon
+        """Converts a nucleotide triplet into its corresponding codon
 
-        @param nucleotide_str: Nucleotide sequence (str or list)
-        @yield: 3-character string codon
+        Parameters
+        ----------
+        nucleotide_str : str or sequence
+            Nucleotide sequence (str or list)
+
+        Yields
+        ------
+        str
+            3-character string codon
+
         """
         if len(nucleotide_str) % 3 != 0:
             raise ValueError('SequenceArray length is not a multiple of three ({0}).'.format(len(nucleotide_str)))
@@ -344,19 +368,28 @@ class NucleotideArray(SequenceArray):
         pass
 
     def basecomp(self):
+        """Return base composition of each sequence
+
+        Returns
+        -------
+        OrderedDict
+            Keys are sequence ids and values are OrderedDict of the corresponding percent makeup for each character
+            except gaps. For example, 'T', 'C', 'A', 'G' for nucleotides.
+
+        Sea also
+        --------
+        SequenceArray.composition : Character composition of a sequence
         """
-        Return the base composition of a NucleotideArray
-        @return: namedtuple of 'A', 'T', 'G', 'C', 'AT', 'GC' percent
-        """
-        #assert re.search('^[ATCG\-]+$', sequence), 'Input sequence contains characters other than A,T,C,G,-'
-        basecomp_of = super().composition(self, seqtype=self.seqtype).T
-        basecomp_of['AT'] = basecomp_of['A'] + basecomp_of['T']
-        basecomp_of['GC'] = basecomp_of['G'] + basecomp_of['C']
-        return basecomp_of.T
+        basecomp_of = super().composition(self, seqtype=self.seqtype)
+        for key, comp in basecomp_of.items():
+            basecomp_of[key]['AT'] = comp['A'] + comp['T']
+            basecomp_of[key]['GC'] = comp['G'] + comp['C']
+        return basecomp_of
 
 
 class CodonArray(SequenceArray):
-    """Protein-coding nucleotide sequence array object constructor
+    """
+    Protein-coding nucleotide sequence array object constructor
 
     This is a special type of SequenceArray for protein-coding sequences. If the array contains
     in-frame protein-coding sequence, NucleotideArray contains methods to represent data as codons (nculeotide triplets)
@@ -372,9 +405,13 @@ class CodonArray(SequenceArray):
     def __translate(self):
         """Translates nucleotide sequences into amino acid sequences
 
-        Assumes that the nucleotide sequence is protein-coding,
-        in-frame, and the start of the ORF corresponds to the beginning of the nucleotide sequence.
-        @return: ProteinArray object
+        Assumes that the nucleotide sequence is protein-coding, in-frame, and the start of the ORF corresponds
+        to the beginning of the nucleotide sequence.
+
+        Returns
+        -------
+        ProteinArray
+
         """
         transl_dct = OrderedDict()
         for key, nt_seq in zip(self.ids, self.sequences):
@@ -443,8 +480,7 @@ class ProteinArray(SequenceArray):
 
 class SequenceAlignment(MutableMapping):
     """
-    Multiple SequenceArray Alignment base class
-    --------------------------------------
+    Multiple sequence alignment base class
 
     The object specified by this class is a combination of a list of sequence names and a 2d numpy ndarray that
     represents the alignment. Thus, each sequence record is a key-value pairing of a sequence name and its corresponding
