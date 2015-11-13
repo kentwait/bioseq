@@ -143,7 +143,7 @@ class SequenceArray(MutableMapping):
         return len(self.ids)
 
     def __repr__(self):
-        return 'Sequences({0})'.format([(k, v) for k, v in zip(self.ids, self.sequences)])
+        return 'SequenceArray({0})'.format([(k, v) for k, v in zip(self.ids, self.sequences)])
 
     def __contains__(self, x):
         pass
