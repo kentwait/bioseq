@@ -2,7 +2,7 @@ from .basetypes import *
 import os
 import numpy as np
 import re
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, KeysView, ValuesView, ItemsView
 from collections import OrderedDict, Counter
 import collections
 from copy import deepcopy
@@ -63,7 +63,7 @@ class SequenceArray(MutableMapping):
         self.name = name
         self.description = description
 
-        if isinstance(input_obj, dict):
+        if isinstance(input_obj, dict) or isinstance(input_obj, MutableMapping):
             records = input_obj
             self._ids = list(records.keys())
             self._sequences = list(records.values())
@@ -137,7 +137,7 @@ class SequenceArray(MutableMapping):
 
     def __iter__(self):
         for key, sequence in zip(self.ids, self.sequences):
-            yield key, sequence
+            yield (key, sequence)
 
     def __len__(self):
         return len(self.ids)
@@ -145,8 +145,18 @@ class SequenceArray(MutableMapping):
     def __repr__(self):
         return 'SequenceArray({0})'.format([(k, v) for k, v in zip(self.ids, self.sequences)])
 
-    def __contains__(self, x):
-        pass
+    def __contains__(self, key):
+        return True if key in self.ids else False
+
+    def keys(self):
+        return KeysView(self.ids)
+
+    def values(self):
+        return ValuesView(self.sequences)
+
+    def items(self):
+        return ItemsView(self)
+
 
     def to_fasta(self, path, linewidth=60):
         """Save sequence array as a FASTA file
@@ -624,7 +634,7 @@ class SequenceAlignment(MutableMapping):
             list_of_sequences = []
 
             # dictionary of id as index and sequence stored as str as the value
-            if isinstance(input_obj, dict):
+            if isinstance(input_obj, dict) or isinstance(input_obj, MutableMapping):
                 self._ids = []
                 for k, v in input_obj.items():
                     if not isinstance(v, str):
