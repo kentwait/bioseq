@@ -6,7 +6,6 @@ from collections.abc import MutableMapping
 from collections import OrderedDict, Counter
 import collections
 from copy import deepcopy
-# import pandas as pd
 
 SEQTYPES = ('nucl', 'prot', 'cod')
 
@@ -38,7 +37,7 @@ class SequenceArray(MutableMapping):
     """
 
     def __init__(self, input_obj, seqtype='nucl', name='', description=''):
-        """Make a new instance of a SequenceArray object from a dictionary, file or FASTA-formatted string.
+        """Create a new SequenceArray object from a dictionary, file or FASTA-formatted string.
 
         Parameters
         ----------
@@ -212,18 +211,21 @@ class SequenceArray(MutableMapping):
             return ProteinAlignment(aln_file)
 
     @staticmethod
-    def parse_fasta(path):
+    def parse_fasta(path, seqtype='nucl'):
         """Read FASTA format entirely using only built-ins.
 
         Parameters
         ----------
         path : str
             File path (absolute or relative) where the FASTA file is located.
+        seqtype : str
+            'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
 
         Returns
         -------
         OrderedDict
             FASTA headers are stored as dictionary keys and its corresponding sequence is stored as its value.
+
         """
         keys = []
         sequence = ''
@@ -247,7 +249,7 @@ class SequenceArray(MutableMapping):
                     sequence += re.sub('\s', '', line)
             if sequence:
                 sequences.append(sequence)
-        return OrderedDict(zip(keys, sequences))
+        return SequenceArray(OrderedDict(zip(keys, sequences)), seqtype=seqtype)
 
     @staticmethod
     def array_to_fasta(keys, sequences, linewidth=60):
@@ -342,7 +344,7 @@ class NucleotideArray(SequenceArray):
 
     """
     def __init__(self, input_obj, name='', description=''):
-        """Make a new instance of a NucleotideArray from a dictionary, file or FASTA-formatted string.
+        """Create a new NucleotideArray from a dictionary, file or FASTA-formatted string.
 
         Parameters
         ----------
@@ -358,27 +360,6 @@ class NucleotideArray(SequenceArray):
 
         """
         super().__init__(input_obj, name=name, seqtype='nucl', description=description)
-
-    @staticmethod
-    def nucleotide_to_codon(nucleotide_str):
-        """Converts a nucleotide triplet into its corresponding codon
-
-        Parameters
-        ----------
-        nucleotide_str : str or sequence
-            Nucleotide sequence (str or list)
-
-        Yields
-        ------
-        str
-            3-character string codon
-
-        """
-        if len(nucleotide_str) % 3 != 0:
-            raise ValueError('SequenceArray length is not a multiple of three ({0}).'.format(len(nucleotide_str)))
-        for j in range(0, len(nucleotide_str), 3):
-            if j+3 <= len(nucleotide_str):
-                yield nucleotide_str[j:j+3]
 
     def to_codonarray(self):
         """Create a CodonArray from the current NucleotideArray
@@ -409,6 +390,27 @@ class NucleotideArray(SequenceArray):
             basecomp_of[key]['GC'] = comp['G'] + comp['C']
         return basecomp_of
 
+    @staticmethod
+    def nucleotide_to_codon(nucleotide_str):
+        """Converts a nucleotide triplet into its corresponding codon
+
+        Parameters
+        ----------
+        nucleotide_str : str or sequence
+            Nucleotide sequence (str or list)
+
+        Yields
+        ------
+        str
+            3-character string codon
+
+        """
+        if len(nucleotide_str) % 3 != 0:
+            raise ValueError('SequenceArray length is not a multiple of three ({0}).'.format(len(nucleotide_str)))
+        for j in range(0, len(nucleotide_str), 3):
+            if j+3 <= len(nucleotide_str):
+                yield nucleotide_str[j:j+3]
+
 
 class CodonArray(SequenceArray):
     """
@@ -422,11 +424,11 @@ class CodonArray(SequenceArray):
 
     """
     def __init__(self, input_obj, name='', description=''):
-        """Make a new instance of a CodonArray from a dictionary, file or FASTA-formatted string.
+        """Create a new CodonArray from a dictionary, file or FASTA-formatted string.
 
         Parameters
         ----------
-        input_obj : dict, str
+        input_obj : dict or str
             Object used to populate a SequenceArray object. This may be one of the following:
             - Dictionary-like object whose id are sequence record names and values are the corresponding sequences
             - Path to a FASTA file
@@ -506,7 +508,7 @@ class CodonArray(SequenceArray):
             codon_aln[self.ids[i]] = ''.join([next(codon) if aa != '-' else '---' for aa in list(aa_aln_seq)])
             i += 1
         codon_aln = CodonAlignment(codon_aln)
-        codon_aln.tofasta(codon_aln_file)
+        codon_aln.to_fasta(codon_aln_file)
         return codon_aln
 
     def basecomp(self):
@@ -538,6 +540,21 @@ class CodonArray(SequenceArray):
 
 class ProteinArray(SequenceArray):
     def __init__(self, input_obj, name='', description=''):
+        """Create a new ProteinArray from a dictionary, file or FASTA-formatted string.
+
+        Parameters
+        ----------
+        input_obj : dict or str
+            Object used to populate a SequenceArray object. This may be one of the following:
+            - Dictionary-like object whose id are sequence record names and values are the corresponding sequences
+            - Path to a FASTA file
+            - FASTA-formatted string
+        name : str
+            Name of the set of sequence records
+        description : str
+            Short description
+
+        """
         super().__init__(input_obj, name=name, seqtype='prot', description=description)
 
     def aacomp(self):
@@ -559,16 +576,21 @@ class SequenceAlignment(MutableMapping):
     alignment. No in-place changes take place when using these methods.
 
     This is the base class for NucleotideAlignment, ProteinAlignment and CodonAlignment.
+
     """
     def __init__(self, input_obj, seqtype, charsize=1, name='', description=''):
-        """
-        Create an Alignment object
+        # TODO : accept FASTA-formatted string
+        """Create a new SequenceAlignment from a dictionary, file or FASTA-formatted string.
 
-        @param input_obj: Alignment objects can be instantiated by passing one of the following:
-        - Dictionary-like object
-        - File path (absolute or relative)
-        - FASTA-formatted string #TODO
-        @param charsize: Number of characters that define a column of the alignment.
+        Parameters
+        ----------
+        input_obj : dict or str
+            Alignment objects can be instantiated by passing one of the following:
+            - Dictionary-like object
+            - File path (absolute or relative)
+        charsize : int
+            Number of characters that define a column of the alignment.
+
         """
         # Description
         self.seqtype = seqtype
@@ -659,11 +681,16 @@ class SequenceAlignment(MutableMapping):
         raise AttributeError('Deleting sequences using this method is not permitted.')
 
     def __setitem__(self, key, value):
-        """
-        Add or update a sequence record.
+        """Add or update a sequence record
 
-        @param key: Record name
-        @param value: SequenceArray
+        Parameters
+        ----------
+        key: str
+            Record name
+        value: np.ndarray
+            Numpy array of the sequence. The length of the added array must be the same as the length of the current
+            array.
+
         """
         if key in self.ids:
             raise KeyError('Key name {0} already in use.'.format(key))
@@ -679,10 +706,17 @@ class SequenceAlignment(MutableMapping):
                                  .format(len(value), self.length))
 
     def __getitem__(self, keys):
-        """
-        Retrieve a record or multiple records using its corresponding key. Pass a list to retrieve multiple entries.
+        """Given a key or list of keys, retrieve a record or multiple records
 
-        @param keys: Record name or list of record names
+        Parameters
+        keys : str or list
+            Record name or list of record names
+
+        Returns
+        -------
+        np.ndarray
+            Sequence ndarray or multiple sequence alignment ndarray if a list of keys was passed
+
         """
         if isinstance(keys, collections.Iterable) and not isinstance(keys, str):
             index_list = []
@@ -734,17 +768,40 @@ class SequenceAlignment(MutableMapping):
         return self + other
 
     def head(self):
+        """Retrieves the first 5 entries of the SequenceAlignment
+
+        Returns
+        -------
+        SequenceAlignment
+            Creates a subset of the current SequenceAlignment containing only the first five entries.
+
+        """
         return type(self)(MSA(ids=self.ids[:5], alignment=self.sequences[:5]), self.seqtype)
 
     def tail(self):
+        """Retrieves the last 5 entries of the SequenceAlignment
+
+        Returns
+        -------
+        SequenceAlignment
+            Creates a subset of the current SequenceAlignment containing only the last five entries.
+
+        """
         return type(self)(MSA(ids=self.ids[-5:], alignment=self.sequences[-5:]), self.seqtype)
 
     def colx(self, *args):
-        """
-        Returns a length-wise subset of the alignment.
+        """Returns a length-wise (column range) subset of the alignment
 
-        @param slice: Inclusive start and exclusive end position of the subset. Follows Python slice conventions.
-        @return: Alignment object of the alignment subset
+        Parameters
+        ----------
+        args: int
+            Inclusive start and exclusive end position of the subset. Follows Python slice conventions.
+
+        Returns
+        -------
+        SequenceAlignment
+            Create a subset of the current SequenceAlignment containing only the specified column range.
+
         """
         if len(args) == 1:
             return type(self)(MSA(ids=self.ids, alignment=self.sequences[:, args[0]]), self.seqtype)
@@ -757,17 +814,32 @@ class SequenceAlignment(MutableMapping):
             raise Exception('Method uses 3 integer arguments at most.')
 
     def subset(self, keys):
-        return type(self)(MSA(ids=keys, alignment=self[keys]),
-                              self.seqtype)
+        """Returns a row-wise (by sample) subset of the current alignment
 
-    def labelpartition(self, label, start, end, coding=True):  # TODO
+        Parameters
+        ----------
+        keys : str or list
+            Record name or list of record names
+
+        Returns
+        -------
+        SequenceAlignment
+            Create a subset of the current SequenceAlignment containing only the specified records.
+
+        """
+        return type(self)(MSA(ids=keys, alignment=self[keys]), self.seqtype)
+
+    def labelpartition(self, label, start, end, coding=True):
+        # TODO
         pass
 
     def xgap(self):
-        """
-        Remove columns from the current alignment that contain at least one gap character. Returns a new alignment.
+        """Remove columns containing at least one gap character from the current alignment
 
-        @return: Alignment object containing the gap-free alignment
+        Returns
+        -------
+        SequenceAlignment
+            Creates a new SequenceAlignment free of gap characters.
         """
         gapchar = '-'*self.charsize
         xgap_cols = []
@@ -776,20 +848,30 @@ class SequenceAlignment(MutableMapping):
                 xgap_cols.append(i)
         return type(self)(MSA(ids=self.ids, alignment=self.sequences[:, xgap_cols]), self.seqtype)
 
-    def bootstrap(self):
-        """
-        Resamples the columns of the alignment and returns a new instance.
+    def resample_cols(self):
+        """Creates a new SequenceAlignment using resampled alignment columns with replacement from the current data
 
-        @return: Alignment object containing the resampled alignment
+        Returns
+        -------
+        SequenceAlignment
+
         """
-        randlist = np.random.random(self.length, self.length, replace=True)
+        randlist = np.random.choice(self.length, self.length, replace=True)
         return type(self)(MSA(ids=self.ids, alignment=self.sequences[:, randlist]), self.seqtype)
 
     def reorder(self, ordered_key_list):
-        """
-        Reorder alignment based on the order of a a given list of keys
-        @param ordered_key_list: list
-        @return: Alignment object containing the reordered alignment
+        """Reorder alignment based on the order of a a given list of keys
+
+        Parameters
+        ----------
+        ordered_key_list : list
+            List of record names arranged based on how samples should be reordered
+
+        Returns
+        -------
+        SequenceAlignment
+            Reordered alignment
+
         """
         sequences = []
         for key in ordered_key_list:
@@ -797,22 +879,45 @@ class SequenceAlignment(MutableMapping):
             sequences.append(self.sequences[index])
         return type(self)(MSA(ids=ordered_key_list, alignment=np.array(sequences)), self.seqtype)
 
-    def tofasta(self, path, linewidth=60):
-        """
-        Save the alignment as a FASTA-formatted file
+    def to_fasta(self, path, linewidth=60):
+        """Save the alignment as a FASTA-formatted file
 
-        @param linewidth: Number of characters per line
+        Parameters
+        ----------
+        linewidth : Number of characters per line
+
         """
         # TODO : Check if basedir of path exists
         with open(path, 'w') as f:
             print(self.__class__.alignment_to_fasta(self, linewidth=linewidth), file=f)
 
-    def tophylip(self, path):  # TODO
+    def to_phylip(self, path):  # TODO
         pass
 
     @staticmethod
-    def parse_fasta(path):
-        return SequenceArray.parse_fasta(path)
+    def parse_fasta(path, seq_type='nucl'):
+        """Read FASTA format entirely using only built-ins.
+
+        Parameters
+        ----------
+        path : str
+            File path (absolute or relative) where the FASTA file is located.
+        seq_type
+
+        Returns
+        -------
+        OrderedDict
+            FASTA headers are stored as dictionary keys and its corresponding sequence is stored as its value.
+
+        """
+        lengths = set()
+        seq_array = SequenceArray.parse_fasta(path)
+        for key, seq in seq_array.items():
+            lengths.add(len(seq))
+        if len(lengths) == 1:
+            return SequenceAlignment(seq_array, seq_type)
+        else:
+            return seq_array
 
     @staticmethod
     def concat(*alignments):
