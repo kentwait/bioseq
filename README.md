@@ -16,4 +16,3 @@ For bug reports and feature requests, please use the [bioseq issue tracker](http
 
 Kent Kawashima
 i (at) kentwait.com
-
