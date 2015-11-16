@@ -1,4 +1,5 @@
 from collections import OrderedDict, namedtuple, Counter
+from types import MethodType
 
 __all__ = ['BASES', 'CODONS', 'STOP_CODONS', 'AMINO_ACIDS', 'GENETIC_CODE', 'CODON_FOLD', 'MSA']
 
@@ -27,7 +28,12 @@ AMINO_ACIDS = 'ARNDCQEGHILKMFPSTWYV'
 transl_code = 'F2L6I3M1V4S4P4T4A4Y2*2H2Q2N2K2D2E2C2*1W1R4S2R2G4'
 transl = ''.join([str(a*int(b)) for a, b in zip(transl_code[::2], transl_code[1::2])])
 GENETIC_CODE = OrderedDict(zip(CODONS, transl))
-GENETIC_CODE.by_index = lambda x: list(GENETIC_CODE.items())[x - 1]
+
+
+def _by_index(x):
+    return list(GENETIC_CODE.items())[x - 1]
+
+GENETIC_CODE.by_index = MethodType(_by_index, GENETIC_CODE)
 
 # Determine degeneracy of genetic code for a particular codon
 #
