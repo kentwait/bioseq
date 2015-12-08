@@ -5,7 +5,7 @@ __all__ = ['BASES', 'CODONS', 'STOP_CODONS', 'AMINO_ACIDS', 'GENETIC_CODE', 'COD
 
 # Nucleotide and amino acid constants
 BASES = 'TCAG'
-CODONS = [a+b+c for a in BASES for b in BASES for c in BASES]
+CODONS = [a+b+c for b in BASES for a in BASES for c in BASES]
 STOP_CODONS = ['TGA', 'TAG', 'TAA']
 AMINO_ACIDS = 'ARNDCQEGHILKMFPSTWYV'
 
@@ -30,8 +30,10 @@ transl = ''.join([str(a*int(b)) for a, b in zip(transl_code[::2], transl_code[1:
 GENETIC_CODE = OrderedDict(zip(CODONS, transl))
 
 
-def _by_index(x):
-    return list(GENETIC_CODE.items())[x - 1]
+def _by_index(self, x):
+    assert x - 1 >= 0, IndexError('Value of x must be integer greater than 0.')
+    assert x - 1 < len(list(self.items())), IndexError('Value of x cannot be greater than 64.')
+    return list(self.items())[x - 1]
 
 GENETIC_CODE.by_index = MethodType(_by_index, GENETIC_CODE)
 

@@ -2,7 +2,7 @@ from .basetypes import *
 import os
 import numpy as np
 import re
-from collections.abc import MutableMapping, KeysView, ValuesView, ItemsView
+from collections.abc import MutableMapping
 from collections import OrderedDict, Counter
 import collections
 from copy import deepcopy
@@ -149,14 +149,16 @@ class SequenceArray(MutableMapping):
         return True if key in self.ids else False
 
     def keys(self):
-        return KeysView(self.ids)
+        for _ in self.ids:
+            yield _
 
     def values(self):
-        return ValuesView(self.sequences)
+        for _ in self.sequences:
+            yield _
 
     def items(self):
-        return ItemsView(self)
-
+        for x in range(len(self.ids)):
+            yield (self.ids[x], self.sequences[x])
 
     def to_fasta(self, path, linewidth=60):
         """Save sequence array as a FASTA file
@@ -687,7 +689,8 @@ class SequenceAlignment(MutableMapping):
                 # Check if it is a valid path, and the file exists
                 if os.path.exists(input_obj):
                     # Parse FASTA file
-                    fasta_dct = self.parse_fasta(input_obj)
+                    # fasta_dct = self.parse_fasta(input_obj)
+                    fasta_dct = SequenceArray.parse_fasta(input_obj)
                     # Store record ID as list
                     self._ids = list(fasta_dct.keys())
                     list_of_sequences = list(fasta_dct.values())
@@ -707,8 +710,9 @@ class SequenceAlignment(MutableMapping):
 
         # Size of alignment
         self.count = len(self)
-        self.length = self.sequences.shape[-1]
-        self.shape = self.sequences.shape
+        self.shape = self.sequences.shape  # number of sample, number of units (bases/aa/codons), char per unit
+        self.length = self.sequences.shape[1]
+
 
     # TODO : Make a "restricted" descriptor for any type of attribute that should not be changed outside of __init__
     # Restrict setting "ids" attribute outside of __init__
@@ -825,13 +829,16 @@ class SequenceAlignment(MutableMapping):
         return self + other
 
     def keys(self):
-        return KeysView(self.ids)
+        for _ in self.ids:
+            yield _
 
     def values(self):
-        return self.sequences
+        for _ in self.sequences:
+            yield _
 
     def items(self):
-        return ((self.ids[x],self.sequences[x]) for x in range(len(self.ids)))
+        for x in range(len(self.ids)):
+            yield (self.ids[x], self.sequences[x])
 
     def head(self):
         """Retrieves the first 5 entries of the sequence alignment
@@ -963,7 +970,7 @@ class SequenceAlignment(MutableMapping):
         NotImplementedError()
 
     @staticmethod
-    def parse_fasta(path, seqtype='nucl'):
+    def parse_fasta(path, seqtype='nucl', output_type='array'):
         """Read FASTA format entirely using only built-ins.
 
         Parameters
@@ -972,6 +979,8 @@ class SequenceAlignment(MutableMapping):
             File path (absolute or relative) where the FASTA file is located.
         seqtype : str
             'nucl' (Nucleotide), 'prot' (Protein), 'cod' (Codon-based)
+        output_type : 'array', 'aln', optional (default = 'array')
+            Choose between output as array (array) or an alingment (aln)
 
         Returns
         -------
@@ -983,9 +992,10 @@ class SequenceAlignment(MutableMapping):
         seq_array = SequenceArray.parse_fasta(path)
         for key, seq in seq_array.items():
             lengths.add(len(seq))
-        if len(lengths) == 1:
-            return SequenceAlignment(seq_array, seqtype)
-        else:
+        if output_type == 'ndarray':
+            if len(lengths) == 1:
+                return SequenceAlignment(seq_array, seqtype)
+        elif output_type == 'dict':
             return seq_array
 
     @staticmethod
@@ -1124,12 +1134,20 @@ class CodonAlignment(NucleotideAlignment):
 
         """
         SequenceAlignment.__init__(self, input_obj, seqtype='cod', charsize=3, name=name, description=description)
-        self.ntalignment = NucleotideAlignment(
-            MSA(ids=self.ids, alignment=np.array([list(''.join(seq)) for seq in self.sequences], dtype='U1')))
+        # Create nucleotide alignment
+        ntaln_lst = list()
+        for seq in self.sequences:
+            ntaln_concat = list()
+            for seq_seq in seq:
+                ntaln_concat.append(''.join(seq_seq))
+            ntaln_lst.append(''.join(ntaln_concat))
+        self.nucl_aln = NucleotideAlignment(
+            MSA(ids=self.ids, alignment=np.array(np.array([list(seq) for seq in ntaln_lst], dtype='U1'), dtype='U1')))
+
         self.pos = OrderedDict()
-        self.pos[1] = self.ntalignment.colx(0, None, 3)
-        self.pos[2] = self.ntalignment.colx(1, None, 3)
-        self.pos[3] = self.ntalignment.colx(2, None, 3)
+        self.pos[1] = self.nucl_aln.colx(0, None, 3)
+        self.pos[2] = self.nucl_aln.colx(1, None, 3)
+        self.pos[3] = self.nucl_aln.colx(2, None, 3)
 
     def make_raxml_codon_partition_file(self, save_path):
         """Make RAxML partition file for a codon alignment
@@ -1148,7 +1166,7 @@ class CodonAlignment(NucleotideAlignment):
                 print('DNA, {0}{1}pos={0}-{2}\\3'.format(i, ordinal_suffix[i], self.length*3), file=f)
 
     @staticmethod
-    def composition(codon_aln_obj, fold_counts=(), pos=2):
+    def composition(codon_aln_obj, fold_counts=(), pos=3):
         """Return the character composition of a CodonAlignment depending on codon position and fold count
 
         Parameters
@@ -1157,19 +1175,24 @@ class CodonAlignment(NucleotideAlignment):
         fold_counts : int
             1,2,3,4,6 fold codon degeneracy
         pos : int
-            0 (1st position), 1 (2nd position), 2 (3rd position)
+            1 (1st position), 2 (2nd position), 3 (3rd position)
 
         Returns
         -------
         OrderedDict
 
         """
+        pos -= 1  # input is 1-indexed but Python is 0-indexed
         codon_filter_set = set([codon for codon, fold in CODON_FOLD.items() if fold in fold_counts])
         filtered_sequences = OrderedDict()
-        for seqid, seq_as_list in zip(codon_aln_obj.ids, codon_aln_obj.sequences):
+        for seqid, seq_ndarray in codon_aln_obj.items():
             if pos == -1:
-                filtered_sequences[seqid] = ''.join([codon for codon in seq_as_list if codon in codon_filter_set])
+                filtered_sequences[seqid] = ''.join(
+                    [codon for codon in seq_ndarray if codon in codon_filter_set]
+                )
             else:
-                filtered_sequences[seqid] = ''.join([codon[pos] for codon in seq_as_list if codon in codon_filter_set])
+                filtered_sequences[seqid] = ''.join(
+                    [codon[pos] for codon in seq_ndarray if codon in codon_filter_set]
+                )
         sequence_obj = SequenceArray(filtered_sequences)
         return SequenceArray.composition(sequence_obj, seqtype='cod')
