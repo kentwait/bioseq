@@ -13,6 +13,7 @@ __all__ = ['SEQTYPES', 'validate_sequence_chars',
 
 SEQTYPES = ('nucl', 'prot', 'cod')
 
+
 def validate_sequence_chars(seq, seqtype='nucl'):
     assert isinstance(seq, str), TypeError('seq should be str or string-like.')
     assert seqtype in SEQTYPES, ValueError('seqtype must be "nucl" for nucleotide, "prot" for protein, '
@@ -712,7 +713,6 @@ class SequenceAlignment(MutableMapping):
         self.count = len(self)
         self.shape = self.sequences.shape  # number of sample, number of units (bases/aa/codons), char per unit
         self.length = self.sequences.shape[1]
-
 
     # TODO : Make a "restricted" descriptor for any type of attribute that should not be changed outside of __init__
     # Restrict setting "ids" attribute outside of __init__
