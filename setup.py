@@ -1,7 +1,6 @@
 from setuptools import setup
 
 setup(
-    # nxsim:
     name='bioseq',
 
     # Version number:
