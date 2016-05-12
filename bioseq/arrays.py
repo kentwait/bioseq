@@ -64,10 +64,12 @@ class SequenceArray(MutableMapping):
         self.name = name
         self.description = description
 
+        # Key-value pairs where id is the sequence record name and the value is the sequence
         if isinstance(input_obj, dict):
             records = input_obj
             self._ids = list(records.keys())
             self._sequences = list(records.values())
+        # String, assumed to be path to FASTA file or contents of FASTA file as a long string
         elif isinstance(input_obj, str):
             # Test if file path
             if os.path.exists(input_obj):
@@ -862,6 +864,7 @@ class SequenceAlignment(MutableMapping):
         """
         return type(self)(MSA(ids=self.ids[-5:], alignment=self.sequences[-5:]), self.seqtype)
 
+    # noinspection PyTypeChecker
     def colx(self, *args):
         """Returns a length-wise (column range) subset of the alignment
 
