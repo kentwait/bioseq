@@ -4,11 +4,11 @@ setup(
     name='bioseq',
 
     # Version number:
-    version='0.2',
+    version='0.2.3',
 
     # Application author details:
     author='Kent Kawashima',
-    author_email='i@kentwait.com',
+    author_email='kentkawashima@gmail.com',
 
     # Package
     packages=['bioseq'],
