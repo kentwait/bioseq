@@ -42,7 +42,7 @@ class SequenceArray(MutableMapping):
 
     """
 
-    def __init__(self, input_obj, seqtype='nucl', name='', description='', validation=False):
+    def __init__(self, input_obj, seqtype='nucl', name='', description='', validate=False):
         """Create a new SequenceArray object from a dictionary, file or FASTA-formatted string.
 
         Parameters
@@ -82,11 +82,12 @@ class SequenceArray(MutableMapping):
             else:
                 raise NotImplementedError('Passing FASTA-formatted strings are not yet supported. '
                                           'Instantiate using an OrderedDict or passing a valid filepath instead.')
-        # Check if sequences contain invalid characters
-        if seqtype in ('nucl', 'prot') and validation:
-            self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
-        else:  # codon seqtype
-            pass
+        if validate:
+            # Check if sequences contain invalid characters
+            if seqtype in ('nucl', 'prot'):
+                self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
+            else:  # codon seqtype
+                pass
 
     @property
     def ids(self):
@@ -268,7 +269,7 @@ class SequenceArray(MutableMapping):
                         sequences.append(sequence)
                         sequence = ''
                 else:
-                    sequence += re.sub('\s', '', line)
+                    sequence += re.sub('\s', '', line.upper())
             if sequence:
                 if upper:
                     sequence = sequence.upper()
@@ -367,7 +368,7 @@ class NucleotideArray(SequenceArray):
     protein-coding sequences through CodonArray.
 
     """
-    def __init__(self, input_obj, name='', description=''):
+    def __init__(self, input_obj, name='', description='', validate=False):
         """Create a new NucleotideArray from a dictionary, file or FASTA-formatted string.
 
         Parameters
@@ -383,7 +384,7 @@ class NucleotideArray(SequenceArray):
             Short description
 
         """
-        super().__init__(input_obj, name=name, seqtype='nucl', description=description)
+        super().__init__(input_obj, name=name, seqtype='nucl', description=description, validate=validate)
 
     def to_codonarray(self):
         """Create a CodonArray from the current NucleotideArray
@@ -447,7 +448,7 @@ class CodonArray(SequenceArray):
     the data.
 
     """
-    def __init__(self, input_obj, name='', description=''):
+    def __init__(self, input_obj, name='', description='', validate=False):
         """Create a new CodonArray from a dictionary, file or FASTA-formatted string.
 
         Parameters
@@ -463,7 +464,7 @@ class CodonArray(SequenceArray):
             Short description
 
         """
-        super().__init__(input_obj, name=name, seqtype='cod', description=description)
+        super().__init__(input_obj, name=name, seqtype='cod', description=description, validate=validate)
         self.pos = OrderedDict()
         self.pos[1] = NucleotideArray(
             OrderedDict([(seqid, ''.join(sequence_as_list))
@@ -600,7 +601,7 @@ class CodonArray(SequenceArray):
 
 
 class ProteinArray(SequenceArray):
-    def __init__(self, input_obj, name='', description=''):
+    def __init__(self, input_obj, name='', description='', validate=False):
         """Create a new ProteinArray from a dictionary, file or FASTA-formatted string.
 
         Parameters
@@ -616,7 +617,7 @@ class ProteinArray(SequenceArray):
             Short description
 
         """
-        super().__init__(input_obj, name=name, seqtype='prot', description=description)
+        super().__init__(input_obj, name=name, seqtype='prot', description=description, validate=validate)
 
     def aacomp(self):
         return super().composition(self, seqtype=self.seqtype)
@@ -914,8 +915,14 @@ class SequenceAlignment(MutableMapping):
     def labelpartition(self, label, start, end, coding=True):
         NotImplementedError()
 
-    def xgap(self):
-        """Remove columns containing at least one gap character from the current alignment
+    def xgap(self, all=False):
+        """Remove columns containing gap character from the current alignment
+
+        Parameters
+        ----------
+        all : bool
+            If True, removes a column only when whole column is gapped.
+            If False, removes a column even when only one gap character is present
 
         Returns
         -------
@@ -925,8 +932,12 @@ class SequenceAlignment(MutableMapping):
         gapchar = '-'*self.charsize
         xgap_cols = []
         for i in range(self.length):
-            if gapchar not in self.sequences[:, i]:
-                xgap_cols.append(i)
+            if all:
+                if not np.all(gapchar == self.sequences[:, i]):
+                    xgap_cols.append(i)
+            else:
+                if not np.any(gapchar == self.sequences[:, i]):
+                    xgap_cols.append(i)
         return type(self)(MSA(ids=self.ids, alignment=self.sequences[:, xgap_cols]), self.seqtype)
 
     def resample_cols(self):

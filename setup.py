@@ -8,7 +8,7 @@ setup(
 
     # Application author details:
     author='Kent Kawashima',
-    author_email='i@kentwait.com',
+    author_email='kentkawashima@gmail.com',
 
     # Package
     packages=['bioseq'],
