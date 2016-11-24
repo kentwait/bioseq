@@ -4,7 +4,7 @@ setup(
     name='bioseq',
 
     # Version number:
-    version='0.2',
+    version='0.2.2',
 
     # Application author details:
     author='Kent Kawashima',

@@ -6,6 +6,8 @@ from collections.abc import MutableMapping
 from collections import OrderedDict, Counter
 import collections
 from copy import deepcopy
+from scipy.sparse import lil_matrix
+import pandas as pd
 
 __all__ = ['SEQTYPES', 'validate_sequence_chars',
            'SequenceArray', 'NucleotideArray', 'ProteinArray', 'CodonArray',
@@ -19,7 +21,7 @@ def validate_sequence_chars(seq, seqtype='nucl'):
     assert seqtype in SEQTYPES, ValueError('seqtype must be "nucl" for nucleotide, "prot" for protein, '
                                            'or "cod" for codon.')
     pattern = '[^{}]'.format(AMINO_ACIDS if seqtype == 'prot' else BASES)
-    invalid_chars = set(re.findall(pattern, seq))
+    invalid_chars = set(re.findall(pattern, seq, re.IGNORECASE))
     if len(invalid_chars) > 0:
         raise ValueError('Sequence contains invalid characters: {}. Check sequence type or individual sequences.'
                          .format(repr(invalid_chars)))
@@ -40,7 +42,7 @@ class SequenceArray(MutableMapping):
 
     """
 
-    def __init__(self, input_obj, seqtype='nucl', name='', description=''):
+    def __init__(self, input_obj, seqtype='nucl', name='', description='', validation=False):
         """Create a new SequenceArray object from a dictionary, file or FASTA-formatted string.
 
         Parameters
@@ -73,7 +75,7 @@ class SequenceArray(MutableMapping):
         elif isinstance(input_obj, str):
             # Test if file path
             if os.path.exists(input_obj):
-                records = SequenceArray.parse_fasta(input_obj)
+                records = SequenceArray.parse_fasta(input_obj, seqtype=seqtype)
                 # self._ids = [key.split(' ')[0] for key in records.keys()]
                 self._ids = list(records.keys())  # preprocessing already done by parse_fasta method
                 self._sequences = list(records.values())
@@ -81,7 +83,7 @@ class SequenceArray(MutableMapping):
                 raise NotImplementedError('Passing FASTA-formatted strings are not yet supported. '
                                           'Instantiate using an OrderedDict or passing a valid filepath instead.')
         # Check if sequences contain invalid characters
-        if seqtype in ('nucl', 'pro'):
+        if seqtype in ('nucl', 'prot') and validation:
             self._sequences = [validate_sequence_chars(_, seqtype=seqtype) for _ in self._sequences]
         else:  # codon seqtype
             pass
@@ -229,7 +231,7 @@ class SequenceArray(MutableMapping):
             return ProteinAlignment(aln_file)
 
     @staticmethod
-    def parse_fasta(path, seqtype='nucl'):
+    def parse_fasta(path, seqtype='nucl', upper=True):
         """Read FASTA format entirely using only built-ins.
 
         Parameters
@@ -261,11 +263,15 @@ class SequenceArray(MutableMapping):
                         raise ValueError('Malformed description line <line {} of {}>'.format(i, path))
                     keys.append(line_id)
                     if sequence:
+                        if upper:
+                            sequence = sequence.upper()
                         sequences.append(sequence)
                         sequence = ''
                 else:
                     sequence += re.sub('\s', '', line)
             if sequence:
+                if upper:
+                    sequence = sequence.upper()
                 sequences.append(sequence)
         return SequenceArray(OrderedDict(zip(keys, sequences)), seqtype=seqtype)
 
@@ -512,8 +518,8 @@ class CodonArray(SequenceArray):
             codon-based multiple sequence alignment.
 
         """
-        if self.seqtype != 'nucl':
-            raise Exception('Seqtype must be "nucl" (nucleotide) to perform codon alignment.')
+        if self.seqtype != 'cod':
+            raise Exception('Seqtype must be "cod" (codon) to perform codon alignment.')
         for i, sequence in enumerate(self.sequences):
             if len(sequence) % 3 != 0:
                 raise ValueError('"{0}" sequence length is not a multiple of three ({1}).'
@@ -671,7 +677,7 @@ class SequenceAlignment(MutableMapping):
                 if isinstance(input_obj[1], np.ndarray):
                     self._sequences = input_obj[1]
                 else:
-                    raise TypeError('Second item in tuple is not a numpy ndarray.')
+                    raise TypeError('Second item in tuple is not a numpy array.')
         else:
             list_of_sequences = []
 
@@ -693,7 +699,7 @@ class SequenceAlignment(MutableMapping):
                 if os.path.exists(input_obj):
                     # Parse FASTA file
                     # fasta_dct = self.parse_fasta(input_obj)
-                    fasta_dct = SequenceArray.parse_fasta(input_obj)
+                    fasta_dct = SequenceArray.parse_fasta(input_obj, seqtype=seqtype)
                     # Store record ID as list
                     self._ids = list(fasta_dct.keys())
                     list_of_sequences = list(fasta_dct.values())
@@ -972,8 +978,43 @@ class SequenceAlignment(MutableMapping):
     def to_phylip(self, path):  # TODO
         NotImplementedError()
 
+    def pssm(self):
+        """
+        Position-specific scoring matrix of the alignment
+
+        Returns
+        -------
+        np.array
+
+        """
+        # TODO : update for codon
+        characters = BASES if self.seqtype in ['nucl', 'cod'] else AMINO_ACIDS
+        characters += '-'
+        pssm_sparse = lil_matrix((self.length, len(characters)))
+        for i in range(self.length):
+            seq = np.array(list(map(str.upper, self.sequences[:, i])))
+            unique_cnts = np.unique(seq, return_counts=True)
+            for j, char in enumerate(unique_cnts[0]):
+                char_cnt = unique_cnts[1][j]
+                pssm_sparse[i, characters.index(char)] = char_cnt
+
+        return pd.DataFrame(pssm_sparse.toarray(), columns=list(characters), dtype=int)
+
+    def consensus_matrix(self):
+        pssm_df = self.pssm()
+        consensus_idx = pssm_df.idxmax(axis=1)
+        consensus_cnt = pssm_df.max(axis=1)
+        consensus_df = pd.concat([consensus_idx, consensus_cnt], axis=1)
+        consensus_df.columns = ['char', 'count']
+        return consensus_df
+
+    def consensus_sequence(self):
+        pssm_df = self.pssm()
+        consensus_idx = pssm_df.idxmax(axis=1)
+        return ''.join(consensus_idx.to_dict().values())
+
     @staticmethod
-    def parse_fasta(path, seqtype='nucl', output_type='array'):
+    def parse_fasta(path, seqtype='nucl', upper=True, output_type='array'):
         """Read FASTA format entirely using only built-ins.
 
         Parameters
@@ -992,7 +1033,7 @@ class SequenceAlignment(MutableMapping):
 
         """
         lengths = set()
-        seq_array = SequenceArray.parse_fasta(path)
+        seq_array = SequenceArray.parse_fasta(path, seqtype=seqtype, upper=upper)
         for key, seq in seq_array.items():
             lengths.add(len(seq))
         if output_type == 'ndarray':
