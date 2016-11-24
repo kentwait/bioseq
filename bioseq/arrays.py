@@ -933,9 +933,11 @@ class SequenceAlignment(MutableMapping):
         xgap_cols = []
         for i in range(self.length):
             if all:
+                # noinspection PyTypeChecker
                 if not np.all(gapchar == self.sequences[:, i]):
                     xgap_cols.append(i)
             else:
+                # noinspection PyTypeChecker
                 if not np.any(gapchar == self.sequences[:, i]):
                     xgap_cols.append(i)
         return type(self)(MSA(ids=self.ids, alignment=self.sequences[:, xgap_cols]), self.seqtype)
@@ -999,17 +1001,57 @@ class SequenceAlignment(MutableMapping):
 
         """
         # TODO : update for codon
-        characters = BASES if self.seqtype in ['nucl', 'cod'] else AMINO_ACIDS
-        characters += '-'
+        if self.seqtype == 'nucl':
+            characters = list(BASES)
+            characters.append('-')
+        elif self.seqtype == 'prot':
+            characters = list(AMINO_ACIDS)
+            characters.append('X')
+            characters.append('-')
+        elif self.seqtype == 'cod':
+            characters = list(CODONS)
+            characters.append('---')
+        else:
+            raise ValueError()
+
         pssm_sparse = lil_matrix((self.length, len(characters)))
         for i in range(self.length):
             seq = np.array(list(map(str.upper, self.sequences[:, i])))
             unique_cnts = np.unique(seq, return_counts=True)
             for j, char in enumerate(unique_cnts[0]):
                 char_cnt = unique_cnts[1][j]
-                pssm_sparse[i, characters.index(char)] = char_cnt
+                if char in characters:
+                    pssm_sparse[i, characters.index(char)] = char_cnt
+                else:
+                    if self.seqtype == 'nucl':
+                        for part_base in DEGENERATE_BASES[char]:
+                            if pssm_sparse[i, characters.index(part_base)]:
+                                pssm_sparse[i, characters.index(part_base)] += char_cnt / \
+                                                                               float(len(DEGENERATE_BASES[char]))
+                            else:
+                                pssm_sparse[i, characters.index(part_base)] = char_cnt / \
+                                                                              float(len(DEGENERATE_BASES[char]))
+                    elif self.seqtype == 'cod':
+                        char_val = [dict(), dict(), dict()]
+                        for k, cod_base in enumerate(char):
+                            print(cod_base)
+                            if cod_base not in BASES:
+                                for part_base in DEGENERATE_BASES[cod_base]:
+                                    char_val[k][part_base] = 1 / float(len(DEGENERATE_BASES[cod_base]))
+                            else:
+                                char_val[k][cod_base] = 1
 
-        return pd.DataFrame(pssm_sparse.toarray(), columns=list(characters), dtype=int)
+                        for a, a_val in char_val[0].items():
+                            for b, b_val in char_val[1].items():
+                                for c, c_val in char_val[2].items():
+                                    if pssm_sparse[i, characters.index(a+b+c)]:
+                                        pssm_sparse[i, characters.index(a+b+c)] += char_cnt * a_val * b_val * c_val
+                                    else:
+                                        pssm_sparse[i, characters.index(a + b + c)] = char_cnt * a_val * b_val * c_val
+                    else:
+                        raise ValueError(char)
+
+        return pd.DataFrame(pssm_sparse.toarray(), columns=list(characters))
 
     def consensus_matrix(self):
         pssm_df = self.pssm()
@@ -1022,7 +1064,7 @@ class SequenceAlignment(MutableMapping):
     def consensus_sequence(self):
         pssm_df = self.pssm()
         consensus_idx = pssm_df.idxmax(axis=1)
-        return ''.join(consensus_idx.to_dict().values())
+        return list(consensus_idx.to_dict().values())
 
     @staticmethod
     def parse_fasta(path, seqtype='nucl', upper=True, output_type='array'):
